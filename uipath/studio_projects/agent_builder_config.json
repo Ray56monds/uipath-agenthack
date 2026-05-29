@@ -1,0 +1,64 @@
+{
+  "agent": {
+    "name": "Escalation Triage Agent",
+    "description": "Classifies customer escalation tickets by urgency, sentiment, intent, and category. Detects special flags like legal threats, VIP customers, and social media risks.",
+    "version": "1.0.0",
+    "type": "conversational"
+  },
+
+  "model": {
+    "provider": "OpenAI",
+    "model_name": "gpt-4o",
+    "temperature": 0,
+    "max_tokens": 1000
+  },
+
+  "system_prompt": "You are a customer escalation triage agent. Analyze the incoming ticket and produce a structured triage assessment.\n\nYou must determine:\n1. **urgency_score** (0.0 to 1.0): How urgent is this? Consider business impact, customer emotion, and time sensitivity.\n2. **sentiment_score** (-1.0 to 1.0): Customer sentiment from very negative (-1) to very positive (1).\n3. **intent**: What does the customer want? (e.g., \"refund\", \"technical_fix\", \"information\", \"escalation\", \"cancellation\")\n4. **category**: One of: billing, technical, account, complaint, legal, general\n5. **recommended_team**: Which team should handle this? (e.g., \"billing_support\", \"technical_l2\", \"account_management\", \"legal\", \"retention\")\n6. **flags**: Array of special flags (e.g., \"legal_threat\", \"vip_customer\", \"social_media_public\", \"churn_risk\", \"profanity\")\n7. **summary**: One-sentence summary of the issue.\n\nRules:\n- If customer mentions lawyer, legal action, or lawsuit → flag \"legal_threat\", urgency >= 0.9\n- If source is social_media → flag \"social_media_public\", urgency += 0.2\n- If sentiment < -0.5 and customer has high lifetime value → flag \"churn_risk\"\n- Profanity or abusive language → flag \"profanity\" but still process professionally\n\nAlways respond with valid JSON matching the output schema.",
+
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "source": {"type": "string", "description": "Ticket source channel"},
+      "subject": {"type": "string", "description": "Ticket subject line"},
+      "body": {"type": "string", "description": "Full ticket body text"},
+      "customer_tier": {"type": "string", "description": "Customer tier level"}
+    },
+    "required": ["subject", "body"]
+  },
+
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "urgency_score": {"type": "number", "minimum": 0, "maximum": 1},
+      "sentiment_score": {"type": "number", "minimum": -1, "maximum": 1},
+      "intent": {"type": "string"},
+      "category": {"type": "string", "enum": ["billing", "technical", "account", "complaint", "legal", "general"]},
+      "recommended_team": {"type": "string"},
+      "flags": {"type": "array", "items": {"type": "string"}},
+      "summary": {"type": "string"}
+    },
+    "required": ["urgency_score", "sentiment_score", "intent", "category", "recommended_team", "flags", "summary"]
+  },
+
+  "tools": [],
+
+  "deployment": {
+    "platform": "UiPath Agent Builder",
+    "trigger": "API call from Maestro Case stage transition",
+    "connected_case_definition": "Customer Escalation",
+    "updates_fields": ["urgency_score", "sentiment_score", "category", "intent", "flags", "recommended_team"]
+  },
+
+  "setup_instructions": [
+    "1. Go to UiPath Automation Cloud → Agent Builder",
+    "2. Click 'Create Agent'",
+    "3. Name: 'Escalation Triage Agent'",
+    "4. Paste the system_prompt above into the agent instructions",
+    "5. Set model to GPT-4o with temperature 0",
+    "6. Define the output schema as structured output",
+    "7. Connect to Maestro Case 'Customer Escalation' definition",
+    "8. Set trigger: when case enters 'Triage' stage",
+    "9. Map output fields to case fields",
+    "10. Test with sample tickets from services/mock_tickets/main.py"
+  ]
+}

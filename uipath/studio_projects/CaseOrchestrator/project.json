@@ -1,0 +1,38 @@
+{
+  "name": "CustomerEscalation.CaseOrchestrator",
+  "projectId": "customer-escalation-case-orchestrator",
+  "description": "Orchestrates the full case lifecycle: triage, enrich, resolve, satisfaction check",
+  "main": "Main.xaml",
+  "dependencies": {
+    "UiPath.System.Activities": "[24.10.6]",
+    "UiPath.WebAPI.Activities": "[1.19.0]",
+    "UiPath.Persistence.Activities": "[1.6.0]"
+  },
+  "toolVersion": "24.10.0",
+  "projectVersion": "1.0.0",
+  "schemaVersion": "4.0",
+  "studioVersion": "24.10.0",
+  "expressionLanguage": "CSharp",
+  "entryPoints": [
+    {
+      "filePath": "Main.xaml",
+      "uniqueId": "case-orchestrator-main",
+      "input": [
+        {"name": "in_CaseId", "type": "System.String", "required": true},
+        {"name": "in_TicketJson", "type": "System.String", "required": true}
+      ],
+      "output": [
+        {"name": "out_Status", "type": "System.String"},
+        {"name": "out_RequiresApproval", "type": "System.Boolean"}
+      ]
+    }
+  ],
+  "runtimeOptions": {
+    "autoDispose": false,
+    "netFramework": false,
+    "readyToRun": false,
+    "isPausable": true,
+    "isAttended": false,
+    "requiresUserInteraction": false
+  }
+}

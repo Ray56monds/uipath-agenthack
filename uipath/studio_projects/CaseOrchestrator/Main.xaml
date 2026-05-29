@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Activity mc:Ignorable="sap sap2010 sads" x:Class="Main"
+  xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:sap="http://schemas.microsoft.com/netfx/2009/xaml/activities/presentation"
+  xmlns:sap2010="http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation"
+  xmlns:sads="http://schemas.microsoft.com/netfx/2010/xaml/activities/debugger"
+  xmlns:ui="http://schemas.uipath.com/workflow/activities"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Sequence DisplayName="Case Orchestrator - Full Lifecycle">
+    <Sequence.Variables>
+      <Variable x:TypeArguments="x:String" Name="orchestratorUrl" Default="http://localhost:8000" />
+      <Variable x:TypeArguments="x:String" Name="in_CaseId" />
+      <Variable x:TypeArguments="x:String" Name="in_TicketJson" />
+      <Variable x:TypeArguments="x:String" Name="responseBody" />
+      <Variable x:TypeArguments="x:Int32" Name="responseCode" />
+      <Variable x:TypeArguments="x:Boolean" Name="requiresApproval" Default="False" />
+      <Variable x:TypeArguments="x:String" Name="out_Status" Default="processing" />
+    </Sequence.Variables>
+
+    <!-- ============ STAGE 1: INTAKE ============ -->
+    <ui:LogMessage DisplayName="Stage 1: Intake" Level="Info"
+      Message="[Orchestrator] Processing case intake..." />
+
+    <ui:HttpClient DisplayName="POST /cases/intake"
+      Method="POST"
+      Url="[orchestratorUrl + &quot;/cases/intake&quot;]"
+      Body="[in_TicketJson]"
+      BodyFormat="application/json"
+      ResponseContent="[responseBody]"
+      ResponseStatusCode="[responseCode]" />
+
+    <!-- Extract case_id from response -->
+    <Assign DisplayName="Extract Case ID">
+      <Assign.To>
+        <OutArgument x:TypeArguments="x:String">[in_CaseId]</OutArgument>
+      </Assign.To>
+      <Assign.Value>
+        <InArgument x:TypeArguments="x:String">[Newtonsoft.Json.Linq.JObject.Parse(responseBody)["case_id"].ToString()]</InArgument>
+      </Assign.Value>
+    </Assign>
+
+    <!-- ============ STAGE 2: TRIAGE ============ -->
+    <ui:LogMessage DisplayName="Stage 2: Triage" Level="Info"
+      Message="[Orchestrator] Running triage agent..." />
+
+    <ui:HttpClient DisplayName="POST /cases/{id}/triage"
+      Method="POST"
+      Url="[orchestratorUrl + &quot;/cases/&quot; + in_CaseId + &quot;/triage&quot;]"
+      ResponseContent="[responseBody]"
+      ResponseStatusCode="[responseCode]" />
+
+    <If DisplayName="Check Triage Success" Condition="[responseCode = 200]">
+      <If.Then>
+        <ui:LogMessage DisplayName="Triage Complete" Level="Info"
+          Message="[Orchestrator] Triage complete. Proceeding to enrichment." />
+      </If.Then>
+      <If.Else>
+        <Sequence DisplayName="Handle Triage Error">
+          <ui:LogMessage DisplayName="Triage Failed" Level="Error"
+            Message="[Orchestrator] Triage failed. Assigning to manual review." />
+          <Assign>
+            <Assign.To><OutArgument x:TypeArguments="x:String">[out_Status]</OutArgument></Assign.To>
+            <Assign.Value><InArgument x:TypeArguments="x:String">["error_triage"]</InArgument></Assign.Value>
+          </Assign>
+        </Sequence>
+      </If.Else>
+    </If>
+
+    <!-- ============ STAGE 3: ENRICHMENT ============ -->
+    <ui:LogMessage DisplayName="Stage 3: Enrichment" Level="Info"
+      Message="[Orchestrator] Running context enrichment agent..." />
+
+    <ui:HttpClient DisplayName="POST /cases/{id}/enrich"
+      Method="POST"
+      Url="[orchestratorUrl + &quot;/cases/&quot; + in_CaseId + &quot;/enrich&quot;]"
+      ResponseContent="[responseBody]"
+      ResponseStatusCode="[responseCode]" />
+
+    <!-- ============ STAGE 4: RESOLUTION ============ -->
+    <ui:LogMessage DisplayName="Stage 4: Resolution" Level="Info"
+      Message="[Orchestrator] Running resolution agent..." />
+
+    <ui:HttpClient DisplayName="POST /cases/{id}/resolve"
+      Method="POST"
+      Url="[orchestratorUrl + &quot;/cases/&quot; + in_CaseId + &quot;/resolve&quot;]"
+      ResponseContent="[responseBody]"
+      ResponseStatusCode="[responseCode]" />
+
+    <!-- Check if human approval is needed -->
+    <Assign DisplayName="Check Approval Required">
+      <Assign.To>
+        <OutArgument x:TypeArguments="x:Boolean">[requiresApproval]</OutArgument>
+      </Assign.To>
+      <Assign.Value>
+        <InArgument x:TypeArguments="x:Boolean">[Newtonsoft.Json.Linq.JObject.Parse(responseBody)["resolution"]["requires_human_approval"].Value(Of Boolean)()]</InArgument>
+      </Assign.Value>
+    </Assign>
+
+    <!-- ============ STAGE 4b: HUMAN DECISION (if needed) ============ -->
+    <If DisplayName="Requires Human Approval?" Condition="[requiresApproval]">
+      <If.Then>
+        <Sequence DisplayName="Wait for Human Approval">
+          <ui:LogMessage DisplayName="Awaiting Human" Level="Info"
+            Message="[Orchestrator] Resolution requires human approval. Creating Action Center task." />
+
+          <!-- Create Action Center task -->
+          <ui:CreateFormTask DisplayName="Create Approval Task"
+            Title="[String.Format(&quot;Approve Resolution: {0}&quot;, in_CaseId)]"
+            TaskAction="approve"
+            TaskObject="[responseBody]" />
+
+          <!-- Wait for task completion (suspends workflow) -->
+          <ui:WaitForFormTask DisplayName="Wait for Approval"
+            TaskAction="[taskResult]" />
+
+          <!-- Process human decision -->
+          <If DisplayName="Was it approved?" Condition="[taskResult = &quot;approve&quot;]">
+            <If.Then>
+              <Sequence>
+                <ui:HttpClient DisplayName="POST Human Approved"
+                  Method="POST"
+                  Url="[orchestratorUrl + &quot;/cases/&quot; + in_CaseId + &quot;/human-decision&quot;]"
+                  Body="[&quot;{\&quot;case_id\&quot;:\&quot;&quot; + in_CaseId + &quot;\&quot;,\&quot;approved\&quot;:true}&quot;]"
+                  BodyFormat="application/json"
+                  ResponseContent="[responseBody]"
+                  ResponseStatusCode="[responseCode]" />
+              </Sequence>
+            </If.Then>
+            <If.Else>
+              <Sequence>
+                <ui:HttpClient DisplayName="POST Human Rejected"
+                  Method="POST"
+                  Url="[orchestratorUrl + &quot;/cases/&quot; + in_CaseId + &quot;/human-decision&quot;]"
+                  Body="[&quot;{\&quot;case_id\&quot;:\&quot;&quot; + in_CaseId + &quot;\&quot;,\&quot;approved\&quot;:false}&quot;]"
+                  BodyFormat="application/json"
+                  ResponseContent="[responseBody]"
+                  ResponseStatusCode="[responseCode]" />
+              </Sequence>
+            </If.Else>
+          </If>
+
+        </Sequence>
+      </If.Then>
+      <If.Else>
+        <ui:LogMessage DisplayName="Auto-resolved" Level="Info"
+          Message="[Orchestrator] Auto-resolved. No human approval needed." />
+      </If.Else>
+    </If>
+
+    <!-- ============ STAGE 5: SATISFACTION ============ -->
+    <ui:LogMessage DisplayName="Stage 5: Satisfaction" Level="Info"
+      Message="[Orchestrator] Running satisfaction analysis..." />
+
+    <ui:HttpClient DisplayName="POST /cases/{id}/satisfaction"
+      Method="POST"
+      Url="[orchestratorUrl + &quot;/cases/&quot; + in_CaseId + &quot;/satisfaction&quot;]"
+      ResponseContent="[responseBody]"
+      ResponseStatusCode="[responseCode]" />
+
+    <!-- ============ STAGE 6: CLOSE ============ -->
+    <ui:LogMessage DisplayName="Stage 6: Close" Level="Info"
+      Message="[Orchestrator] Closing case..." />
+
+    <ui:HttpClient DisplayName="POST /cases/{id}/close"
+      Method="POST"
+      Url="[orchestratorUrl + &quot;/cases/&quot; + in_CaseId + &quot;/close&quot;]"
+      ResponseContent="[responseBody]"
+      ResponseStatusCode="[responseCode]" />
+
+    <Assign DisplayName="Set Final Status">
+      <Assign.To><OutArgument x:TypeArguments="x:String">[out_Status]</OutArgument></Assign.To>
+      <Assign.Value><InArgument x:TypeArguments="x:String">["completed"]</InArgument></Assign.Value>
+    </Assign>
+
+    <ui:LogMessage DisplayName="Done" Level="Info"
+      Message="[Orchestrator] Case lifecycle complete." />
+
+  </Sequence>
+</Activity>

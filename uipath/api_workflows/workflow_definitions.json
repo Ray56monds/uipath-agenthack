@@ -1,0 +1,133 @@
+{
+  "api_workflows": [
+    {
+      "name": "TriggerTriageAgent",
+      "description": "Called when a case enters the Triage stage. Sends ticket data to the triage agent and updates case fields.",
+      "method": "POST",
+      "endpoint": "/cases/{case_id}/triage",
+      "trigger": "Case stage transition → Triage",
+      "input": {
+        "case_id": "string",
+        "ticket": {
+          "source": "string",
+          "subject": "string",
+          "body": "string",
+          "customer_tier": "string"
+        }
+      },
+      "output": {
+        "urgency_score": "number",
+        "sentiment_score": "number",
+        "intent": "string",
+        "category": "string",
+        "recommended_team": "string",
+        "flags": "array",
+        "summary": "string"
+      },
+      "actions_after": [
+        "Update case triage fields",
+        "Transition to Enrichment stage",
+        "If flags contains 'legal_threat' → create Legal Review action"
+      ]
+    },
+    {
+      "name": "TriggerContextAgent",
+      "description": "Called when a case enters the Enrichment stage. Pulls CRM data and generates context brief.",
+      "method": "POST",
+      "endpoint": "/cases/{case_id}/enrich",
+      "trigger": "Case stage transition → Enrichment",
+      "input": {
+        "case_id": "string",
+        "customer_id": "string",
+        "subject": "string",
+        "body": "string",
+        "category": "string",
+        "urgency_score": "number"
+      },
+      "output": {
+        "context_brief": "string",
+        "customer_tier": "string",
+        "lifetime_value": "number",
+        "churn_risk_score": "number"
+      },
+      "actions_after": [
+        "Update case context fields",
+        "Transition to Resolution stage",
+        "If customer_tier is VIP → set priority to Critical"
+      ]
+    },
+    {
+      "name": "TriggerResolutionAgent",
+      "description": "Called when a case enters the Resolution stage. Drafts response and recommends actions.",
+      "method": "POST",
+      "endpoint": "/cases/{case_id}/resolve",
+      "trigger": "Case stage transition → Resolution",
+      "input": {
+        "case_id": "string",
+        "subject": "string",
+        "body": "string",
+        "category": "string",
+        "urgency_score": "number",
+        "sentiment_score": "number",
+        "intent": "string",
+        "flags": "array",
+        "customer_tier": "string",
+        "context_brief": "string"
+      },
+      "output": {
+        "draft_response": "string",
+        "internal_notes": "string",
+        "suggested_actions": "array",
+        "compensation_recommendation": "string",
+        "requires_human_approval": "boolean",
+        "approval_reason": "string",
+        "escalate_to": "string"
+      },
+      "actions_after": [
+        "Update case resolution fields",
+        "If requires_human_approval → create Action Center task",
+        "If NOT requires_human_approval → auto-transition to Satisfaction"
+      ]
+    },
+    {
+      "name": "TriggerSatisfactionAgent",
+      "description": "Called after resolution is approved. Analyzes satisfaction and predicts churn.",
+      "method": "POST",
+      "endpoint": "/cases/{case_id}/satisfaction",
+      "trigger": "Case stage transition → Satisfaction (after human approval or auto-resolve)",
+      "input": {
+        "case_id": "string",
+        "subject": "string",
+        "customer_tier": "string",
+        "urgency_score": "number",
+        "sentiment_score": "number",
+        "flags": "array",
+        "resolution": "object"
+      },
+      "output": {
+        "satisfaction_score": "number",
+        "churn_probability": "number",
+        "sentiment": "string",
+        "action": "string",
+        "follow_up_required": "boolean",
+        "risk_factors": "array",
+        "retention_actions": "array"
+      },
+      "actions_after": [
+        "Update case satisfaction fields",
+        "If action == 'close_case' → transition to Closed",
+        "If action == 're_escalate' → transition back to Resolution",
+        "If action == 'follow_up' → schedule follow-up task"
+      ]
+    }
+  ],
+
+  "deployment_notes": [
+    "1. Deploy the Python orchestrator (orchestrator.py) to a server accessible from UiPath Cloud",
+    "2. In UiPath Automation Cloud → Integration Service → add HTTP connector",
+    "3. Base URL: your deployed orchestrator URL (e.g., https://your-app.azurewebsites.net)",
+    "4. Create API Workflows in UiPath Studio Web that call these endpoints",
+    "5. Connect each API Workflow to the corresponding Maestro Case stage transition",
+    "6. Test end-to-end with a sample ticket"
+  ]
+}

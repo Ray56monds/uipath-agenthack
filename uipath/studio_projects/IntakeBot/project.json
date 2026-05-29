@@ -1,0 +1,33 @@
+{
+  "name": "CustomerEscalation.IntakeBot",
+  "projectId": "customer-escalation-intake-bot",
+  "description": "RPA bot that pulls tickets from email/chat/social and creates cases in Maestro",
+  "main": "Main.xaml",
+  "dependencies": {
+    "UiPath.System.Activities": "[24.10.6]",
+    "UiPath.Mail.Activities": "[1.23.11]",
+    "UiPath.WebAPI.Activities": "[1.19.0]",
+    "UiPath.UIAutomation.Activities": "[24.10.10]"
+  },
+  "toolVersion": "24.10.0",
+  "projectVersion": "1.0.0",
+  "schemaVersion": "4.0",
+  "studioVersion": "24.10.0",
+  "expressionLanguage": "CSharp",
+  "entryPoints": [
+    {
+      "filePath": "Main.xaml",
+      "uniqueId": "intake-bot-main",
+      "input": [],
+      "output": []
+    }
+  ],
+  "runtimeOptions": {
+    "autoDispose": false,
+    "netFramework": false,
+    "readyToRun": false,
+    "isPausable": true,
+    "isAttended": false,
+    "requiresUserInteraction": false
+  }
+}

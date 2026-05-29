@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Activity mc:Ignorable="sap sap2010 sads" x:Class="Main"
+  xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:sap="http://schemas.microsoft.com/netfx/2009/xaml/activities/presentation"
+  xmlns:sap2010="http://schemas.microsoft.com/netfx/2010/xaml/activities/presentation"
+  xmlns:sads="http://schemas.microsoft.com/netfx/2010/xaml/activities/debugger"
+  xmlns:ui="http://schemas.uipath.com/workflow/activities"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Sequence DisplayName="Customer Escalation Intake Bot">
+    <Sequence.Variables>
+      <Variable x:TypeArguments="x:String" Name="orchestratorUrl" Default="http://localhost:8000" />
+      <Variable x:TypeArguments="x:String" Name="ticketServiceUrl" Default="http://localhost:8002" />
+      <Variable x:TypeArguments="x:String" Name="responseBody" />
+      <Variable x:TypeArguments="x:Int32" Name="responseCode" />
+    </Sequence.Variables>
+
+    <!-- Step 1: Log Start -->
+    <ui:LogMessage DisplayName="Log Start" Level="Info"
+      Message="[IntakeBot] Starting ticket intake cycle..." />
+
+    <!-- Step 2: Fetch pending tickets from ticket service -->
+    <ui:HttpClient DisplayName="GET Pending Tickets"
+      Method="GET"
+      Url="[ticketServiceUrl + &quot;/tickets/pending&quot;]"
+      ResponseContent="[responseBody]"
+      ResponseStatusCode="[responseCode]" />
+
+    <!-- Step 3: Check if tickets exist -->
+    <If DisplayName="Check for pending tickets"
+      Condition="[responseCode = 200 And Not String.IsNullOrEmpty(responseBody)]">
+      <If.Then>
+        <Sequence DisplayName="Process Each Ticket">
+
+          <!-- Step 4: Deserialize tickets JSON array -->
+          <ui:DeserializeJson DisplayName="Parse Tickets"
+            JsonString="[responseBody]"
+            x:TypeArguments="x:Object[]"
+            JsonObject="[tickets]" />
+
+          <!-- Step 5: For each ticket, send to orchestrator -->
+          <ForEach x:TypeArguments="x:Object" DisplayName="For Each Ticket"
+            Values="[tickets]">
+            <ActivityAction x:TypeArguments="x:Object">
+              <Argument x:TypeArguments="x:Object" x:Name="ticket" />
+              <Sequence DisplayName="Submit Ticket to Orchestrator">
+
+                <!-- Build intake payload -->
+                <Assign DisplayName="Build Payload">
+                  <Assign.To>
+                    <OutArgument x:TypeArguments="x:String">[payload]</OutArgument>
+                  </Assign.To>
+                  <Assign.Value>
+                    <InArgument x:TypeArguments="x:String">[ticket.ToString()]</InArgument>
+                  </Assign.Value>
+                </Assign>
+
+                <!-- POST to orchestrator /cases/intake -->
+                <ui:HttpClient DisplayName="POST Case Intake"
+                  Method="POST"
+                  Url="[orchestratorUrl + &quot;/cases/intake&quot;]"
+                  Body="[payload]"
+                  BodyFormat="application/json"
+                  ResponseContent="[responseBody]"
+                  ResponseStatusCode="[responseCode]" />
+
+                <ui:LogMessage DisplayName="Log Case Created" Level="Info"
+                  Message="[String.Format(&quot;[IntakeBot] Case created: {0}&quot;, responseBody)]" />
+
+              </Sequence>
+            </ActivityAction>
+          </ForEach>
+
+        </Sequence>
+      </If.Then>
+      <If.Else>
+        <ui:LogMessage DisplayName="No Tickets" Level="Info"
+          Message="[IntakeBot] No pending tickets found." />
+      </If.Else>
+    </If>
+
+    <!-- Step 6: Log Complete -->
+    <ui:LogMessage DisplayName="Log Complete" Level="Info"
+      Message="[IntakeBot] Intake cycle complete." />
+
+  </Sequence>
+</Activity>
