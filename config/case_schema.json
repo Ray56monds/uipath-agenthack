@@ -1,0 +1,63 @@
+{
+  "case_schema": {
+    "case_id": "string",
+    "created_at": "datetime",
+    "updated_at": "datetime",
+    "stage": "enum: intake | triage | routing | resolution | satisfaction | closed | re_escalated",
+    "status": "enum: open | in_progress | awaiting_human | awaiting_customer | resolved | closed",
+    "priority": "enum: low | medium | high | critical",
+    "customer": {
+      "customer_id": "string",
+      "name": "string",
+      "email": "string",
+      "tier": "enum: standard | premium | vip | enterprise",
+      "lifetime_value": "number",
+      "open_cases_count": "integer",
+      "sentiment_history": "array"
+    },
+    "ticket": {
+      "source": "enum: email | chat | social_media | phone | portal",
+      "subject": "string",
+      "body": "string",
+      "attachments": "array"
+    },
+    "triage": {
+      "urgency_score": "number (0-1)",
+      "sentiment_score": "number (-1 to 1)",
+      "intent": "string",
+      "category": "enum: billing | technical | account | complaint | legal | general",
+      "detected_entities": "array",
+      "recommended_team": "string"
+    },
+    "resolution": {
+      "assigned_to": "string",
+      "assigned_team": "string",
+      "drafted_response": "string",
+      "suggested_actions": "array",
+      "compensation_offered": "number",
+      "human_approved": "boolean",
+      "resolution_notes": "string"
+    },
+    "satisfaction": {
+      "survey_sent": "boolean",
+      "survey_response": "string",
+      "satisfaction_score": "number (1-5)",
+      "churn_risk": "number (0-1)",
+      "follow_up_required": "boolean"
+    },
+    "sla": {
+      "target_resolution_hours": "number",
+      "warning_triggered": "boolean",
+      "breached": "boolean"
+    },
+    "audit_trail": [
+      {
+        "timestamp": "datetime",
+        "actor": "string",
+        "actor_type": "enum: agent | human | rpa | system",
+        "action": "string",
+        "details": "object"
+      }
+    ]
+  }
+}
