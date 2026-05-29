@@ -1,0 +1,246 @@
+{
+  "case_definition": {
+    "name": "Customer Escalation",
+    "description": "Manages complex customer escalations from intake to resolution",
+    "prefix": "ESC",
+    "version": "1.0"
+  },
+
+  "stages": [
+    {
+      "name": "Intake",
+      "order": 1,
+      "description": "Ticket received and case created",
+      "actor": "RPA Bot",
+      "sla_hours": 1,
+      "auto_transition": true,
+      "exit_criteria": ["ticket_ingested", "customer_identified"]
+    },
+    {
+      "name": "Triage",
+      "order": 2,
+      "description": "AI classifies urgency, sentiment, and intent",
+      "actor": "Triage Agent (UiPath Agent Builder)",
+      "sla_hours": 2,
+      "auto_transition": true,
+      "exit_criteria": ["urgency_scored", "category_assigned", "flags_detected"]
+    },
+    {
+      "name": "Enrichment",
+      "order": 3,
+      "description": "Context agent pulls customer history from CRM",
+      "actor": "Context Agent (LangChain)",
+      "sla_hours": 4,
+      "auto_transition": true,
+      "exit_criteria": ["customer_data_retrieved", "context_brief_generated"]
+    },
+    {
+      "name": "Resolution",
+      "order": 4,
+      "description": "Resolution agent drafts response and recommends actions",
+      "actor": "Resolution Agent (LangChain) + Human",
+      "sla_hours": 24,
+      "auto_transition": false,
+      "exit_criteria": ["response_drafted", "human_approved_or_auto_resolved"]
+    },
+    {
+      "name": "Satisfaction",
+      "order": 5,
+      "description": "Post-resolution analysis and churn prediction",
+      "actor": "Satisfaction Agent (LangChain)",
+      "sla_hours": 48,
+      "auto_transition": true,
+      "exit_criteria": ["satisfaction_scored", "churn_assessed"]
+    },
+    {
+      "name": "Closed",
+      "order": 6,
+      "description": "Case resolved and archived",
+      "actor": "System",
+      "sla_hours": null,
+      "auto_transition": false,
+      "exit_criteria": ["case_archived"]
+    }
+  ],
+
+  "fields": {
+    "case_info": [
+      {"name": "case_id", "type": "string", "required": true, "auto_generated": true},
+      {"name": "created_at", "type": "datetime", "required": true, "auto_generated": true},
+      {"name": "updated_at", "type": "datetime", "required": true, "auto_generated": true},
+      {"name": "status", "type": "enum", "values": ["open", "in_progress", "awaiting_human", "resolved", "closed", "re_escalated"], "required": true},
+      {"name": "priority", "type": "enum", "values": ["low", "medium", "high", "critical"], "required": true}
+    ],
+    "customer": [
+      {"name": "customer_id", "type": "string", "required": true},
+      {"name": "customer_name", "type": "string", "required": false},
+      {"name": "customer_tier", "type": "enum", "values": ["standard", "premium", "gold", "platinum", "enterprise", "vip"], "required": true},
+      {"name": "lifetime_value", "type": "number", "required": false},
+      {"name": "churn_risk_score", "type": "number", "required": false, "min": 0, "max": 1}
+    ],
+    "ticket": [
+      {"name": "ticket_id", "type": "string", "required": true},
+      {"name": "source", "type": "enum", "values": ["email", "chat", "phone", "social_media", "portal"], "required": true},
+      {"name": "subject", "type": "string", "required": true},
+      {"name": "body", "type": "text", "required": true}
+    ],
+    "triage": [
+      {"name": "urgency_score", "type": "number", "required": false, "min": 0, "max": 1},
+      {"name": "sentiment_score", "type": "number", "required": false, "min": -1, "max": 1},
+      {"name": "category", "type": "enum", "values": ["billing", "technical", "account", "complaint", "legal", "general"], "required": false},
+      {"name": "intent", "type": "string", "required": false},
+      {"name": "flags", "type": "array", "required": false},
+      {"name": "recommended_team", "type": "string", "required": false}
+    ],
+    "resolution": [
+      {"name": "draft_response", "type": "text", "required": false},
+      {"name": "suggested_actions", "type": "array", "required": false},
+      {"name": "compensation", "type": "string", "required": false},
+      {"name": "requires_human_approval", "type": "boolean", "required": false},
+      {"name": "approved_by", "type": "string", "required": false},
+      {"name": "escalate_to", "type": "string", "required": false}
+    ],
+    "satisfaction": [
+      {"name": "satisfaction_score", "type": "number", "required": false, "min": 0, "max": 1},
+      {"name": "churn_probability", "type": "number", "required": false, "min": 0, "max": 1},
+      {"name": "follow_up_required", "type": "boolean", "required": false},
+      {"name": "retention_actions", "type": "array", "required": false}
+    ]
+  },
+
+  "sla_rules": [
+    {
+      "name": "Critical SLA",
+      "condition": "priority == 'critical'",
+      "max_resolution_hours": 4,
+      "escalation_action": "notify_manager"
+    },
+    {
+      "name": "High SLA",
+      "condition": "priority == 'high'",
+      "max_resolution_hours": 8,
+      "escalation_action": "reassign_senior"
+    },
+    {
+      "name": "VIP SLA",
+      "condition": "customer_tier in ['vip', 'enterprise', 'platinum']",
+      "max_resolution_hours": 4,
+      "escalation_action": "assign_dedicated_agent"
+    },
+    {
+      "name": "Standard SLA",
+      "condition": "priority in ['medium', 'low']",
+      "max_resolution_hours": 48,
+      "escalation_action": "send_reminder"
+    }
+  ],
+
+  "transitions": [
+    {
+      "from": "Intake",
+      "to": "Triage",
+      "trigger": "auto",
+      "condition": "ticket_ingested == true"
+    },
+    {
+      "from": "Triage",
+      "to": "Enrichment",
+      "trigger": "auto",
+      "condition": "urgency_scored == true"
+    },
+    {
+      "from": "Enrichment",
+      "to": "Resolution",
+      "trigger": "auto",
+      "condition": "context_brief_generated == true"
+    },
+    {
+      "from": "Resolution",
+      "to": "Satisfaction",
+      "trigger": "human_approval",
+      "condition": "response_approved == true OR auto_resolved == true"
+    },
+    {
+      "from": "Satisfaction",
+      "to": "Closed",
+      "trigger": "auto",
+      "condition": "satisfaction_score > 0.5 AND churn_probability < 0.5"
+    },
+    {
+      "from": "Satisfaction",
+      "to": "Resolution",
+      "trigger": "auto",
+      "condition": "satisfaction_score <= 0.3 OR action == 're_escalate'",
+      "description": "Re-escalate if customer unsatisfied"
+    }
+  ],
+
+  "dynamic_paths": [
+    {
+      "name": "VIP Fast Track",
+      "trigger": "customer_tier in ['vip', 'enterprise']",
+      "action": "skip_queue",
+      "description": "VIP customers bypass standard queue, get dedicated agent"
+    },
+    {
+      "name": "Legal Escalation",
+      "trigger": "'legal_threat' in flags",
+      "action": "route_to_legal",
+      "description": "Route to legal team, flag compliance"
+    },
+    {
+      "name": "Sentiment Drop",
+      "trigger": "sentiment_score < -0.7 AND customer_tier != 'standard'",
+      "action": "escalate_senior",
+      "description": "Auto-escalate to senior agent when sentiment drops"
+    },
+    {
+      "name": "Social Media Crisis",
+      "trigger": "'social_media_viral' in flags",
+      "action": "trigger_pr_protocol",
+      "description": "Activate PR crisis protocol for viral posts"
+    },
+    {
+      "name": "Customer Unresponsive",
+      "trigger": "last_customer_response_hours > 48",
+      "action": "auto_follow_up_then_close",
+      "description": "Send follow-up, close after 72h if no response"
+    },
+    {
+      "name": "Resolution Rejected",
+      "trigger": "human_rejected == true",
+      "action": "re_escalate_tier",
+      "description": "Re-open and escalate to next tier"
+    }
+  ],
+
+  "action_center_tasks": [
+    {
+      "name": "Approve Resolution",
+      "stage": "Resolution",
+      "trigger": "requires_human_approval == true",
+      "assignee_rule": "recommended_team",
+      "form_fields": ["draft_response", "suggested_actions", "compensation"],
+      "actions": ["approve", "reject", "modify_and_approve"],
+      "sla_hours": 4
+    },
+    {
+      "name": "Legal Review",
+      "stage": "Resolution",
+      "trigger": "'legal_threat' in flags",
+      "assignee_rule": "legal_team",
+      "form_fields": ["draft_response", "customer_tier", "body"],
+      "actions": ["approve", "reject", "escalate_external"],
+      "sla_hours": 2
+    },
+    {
+      "name": "VIP Retention Decision",
+      "stage": "Resolution",
+      "trigger": "customer_tier in ['vip', 'enterprise'] AND churn_risk_score > 0.6",
+      "assignee_rule": "account_manager",
+      "form_fields": ["draft_response", "compensation", "lifetime_value"],
+      "actions": ["approve", "increase_compensation", "schedule_call"],
+      "sla_hours": 2
+    }
+  ]
+}
